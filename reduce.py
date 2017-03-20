@@ -63,14 +63,18 @@ def withphotutils(fitsfile, outfile, makeplots=False):
     from astropy.stats import sigma_clipped_stats
     hdu = fits.open(fitsfile)
     data = hdu[0].data
-    w = wcs.WCS(hdu[1].header)
+    w = wcs.WCS(hdu[0].header)
     nanmask = np.isnan(data)
     data[nanmask] = -99
     # square-ify
     nx, ny = np.shape(data)
     if nx != ny:
-        filler = np.zeros((ny - nx, ny)) - 99
-        newdata = np.vstack((data, filler))
+        if ny > nx:
+            filler = np.zeros((ny - nx, ny)) - 99
+            newdata = np.vstack((data, filler))
+        else:
+            filler = np.zeros((nx, nx - ny)) - 99
+            newdata = np.hstack((data, filler))
     else:
         newdata = data.copy(deep=True)
 
@@ -100,11 +104,15 @@ def withphotutils(fitsfile, outfile, makeplots=False):
     vegamagerr = verrtest(phot_table['aperture_sum'],
                           phot_table['aperture_sum_err'])
     ra, dec = w.all_pix2world(phot_table['xcenter'], phot_table['ycenter'], 1)
+
     phot_table['ra'] = ra
     phot_table['dec'] = dec
     phot_table['vegamag'] = vegamag
     phot_table['vegamagerr'] = vegamagerr
-    phot_table.write(outfile, format='ascii.commented_header')
+    fmts = {c: '%.6f' for c in ['xcenter', 'ycenter', 'aperture_sum',
+                                'aperture_sum_err', 'ra', 'dec', 'vegamag',
+                                'vegamagerr']}
+    phot_table.write(outfile, format='ascii.commented_header', formats=fmts)
     if makeplots:
         outfig = outfile + '.pdf'
         axs = photplots(newdata, bkg.background, bkg.background_rms, data_sub,
@@ -163,7 +171,7 @@ def getmags(fitsfile, outfile, makeplots=False, photutils=True):
     return vegamag, vegamagerr, ra, dec
 
 
-def parse_args(argv):
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="source extract!")
 
     parser.add_argument('fitsfiles', nargs='*', type=str,
@@ -171,7 +179,7 @@ def parse_args(argv):
     return parser.parse_args(argv)
 
 
-def main(argv):
+def main(argv=None):
     args = parse_args(argv)
     fig, ax = plt.subplots()
     fig1, ax1 = plt.subplots()
@@ -196,4 +204,4 @@ def main(argv):
     return
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main())
