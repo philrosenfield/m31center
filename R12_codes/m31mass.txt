@@ -1,0 +1,27 @@
+M31 Bulge Mass:
+
+Assuming:
+B-R = 1.8 (Walterbos & Kennicutt 1987 @ 7')
+M/L[K] = 1.09 (Bell & de Jong 2001, assuming Diet Salpeter IMF)
+M/L[3.6] = 0.95 (Oh et al. 2008)
+M/L[K] = 0.96 (Bell et al. 2003, assuming Diet Salpeter IMF)
+M/L[3.6] = 0.83 (Oh et al. 2008)
+ADOPT: M/L[3.6]= 0.95
+
+Mass [Msol] = < Flux in Jy > / (2.315e-9 [Jy/Lsun]) * (0.95 [Msun/Lsun])
+
+Using:
+M/L[K]=(-0.264)+(0.138 * B-R ) (BdJ01)
+M/L[K]=(-0.776)+(0.452 * B-R ) (Bell03)
+M/L[3.6]=(-0.05)+(0.92 * M/L[K] ) (Oh08)
+Distance Modulus of M31 = 24.47 (McConnachie+05)
+Msolar(3.6) = 3.24 = 14.21 Jy @ 10 pc (Oh08)
+Msolar(3.6) = 27.71 = 2.315e-9 Jy @ M31
+
+Text:
+In order to normalize our source counts by stellar mass, we convert our 3.6 micron flux measurements to mass estimates.  We assume an optical bulge color of B-R = 1.8 (Walterbos & Kennicutt 1987), a K-band M/L ratio of 1.09  derived using the color-dependent relations from Bell & de Jong (2001), and 3.6 micron to K-band M/L ratio conversion from Oh et al. (2008), resulting in an 3.6 micron M/L ratio of 0.95.
+
+References:
+Walterbos & Kennicutt 1987 = ADS: 1987A&AS...69..311W
+Oh et al. 2008 = ADS: 2008AJ....136.2761O
+Bell & de Jong 2001 = ADS: 2001ApJ...550..212B

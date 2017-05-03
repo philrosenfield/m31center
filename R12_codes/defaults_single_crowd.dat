@@ -1,0 +1,40 @@
+# defaults FINAL!
+
+single                     True
+phot_tests                 False
+save_lf                    False
+raw_lf                     False
+mag_cut                    90
+sharp_cut                  0.075
+snr_cut                    4.
+crowd_cut                  0.5
+round_cut                  1.5
+
+Filter1                    F275W
+Filter2                    F336W
+
+# A_V NED
+Av_bulge                    0.206
+Av_disk                     0.99
+
+# distance modulus
+# dmod = 24.36 # NED
+# Freeman et al. 2001
+dmod                       24.47 
+
+# Exctinction values from Cardelli et al. 1989 with R_v = 3.1:
+# Teff > 20000K
+# af275w = 2.059
+# af336w = 1.674
+
+# exTeff = 15000
+af275w                     2.050
+af336w                     1.671
+
+phot_dir                   UVBrights/diy_final/phot_diag
+comp_data                  UVBrights/asts_diag/comp_data_crowd_final.dat
+comp_file                  UVBrights/asts_diag/comp_corrections_crowd.dat
+plot_dir                   UVBrights/diy_final
+ast_diag                   UVBrights/asts_diag_final/
+ast_file                   UVBrights/asts_diag/B01_ASTs_crowd5.dat
+cont_file                  UVBrights/asts_diag_final/contamination.dat
