@@ -7,13 +7,12 @@ must be run interactively.
 import matplotlib.pyplot as plt
 import numpy as np
 
-from astropy import wcs
 from astropy.io import fits
 from astropy.table import Table
 from matplotlib.path import Path
-from shapely.geometry import Polygon, Point
 
 
+# this could easily be sped up...
 def circ(ra, dec, r, d, min=True):
     dist = np.sqrt((ra - r) ** 2 + (dec - d) ** 2)
     if min:
@@ -23,47 +22,63 @@ def circ(ra, dec, r, d, min=True):
     idx = fn(dist)
     return dist[idx], idx
 
-f140fn = '13710_M31-CENTER-SBC1_drz_phot.dat'
-f140fn = '13710_M31-CENTER-SBC2_drz_phot.dat'
-f140fn = '13710_M31-CENTER-SBC3_drz_phot.dat'
 
-phot = Table.read(f140fn, format='ascii.commented_header')
-radec = np.column_stack([phot['ra'], phot['dec']])
-ply = Polygon(radec).convex_hull
-
-# this is very close to exactly the edges of the footprint, FYI
-# reg = ply.to_wkt()
-
-reg = ply.envelope.convex_hull.to_wkt()
-# verts: [bottomleft, topleft, topright, bottomright, bottomleft]
-# (each above is [ra,dec])
-verts = parse_poly(reg)
-
-# push the envelope (!) to not be exactly at (4) data points
-offset = 0.0001
-
-verts[:, 0][np.array([2, 3])] += offset  # right sides increase
-verts[:, 0][np.array([0, 1, 4])] -= offset  # left sides decrease
-verts[:, 1][np.array([0, 3, 4])] -= offset  # bottom decrease
-verts[:, 1][np.array([1, 2])] += offset  # top increase
-
-# Read UVIS catalog (reference)
+# Read UVIS catalog (reference). Ok ... this could all be done with
+# astropy.table.Table.read however, it wasn't immediately obvious how to
+# use astropy.table.Table.write(format='fits') and maintain the fits header.
 f336fn = '13710_M31-CENTER.gst.fits'
-hdu = fits.open(f336fn)
-w = wcs.WCS(hdu[1].header)
-uvis = hdu[1].data
-# Cull to SBC region
-# radec = np.column_stack([uvis['ra'], uvis['dec']])
-# inds, = np.nonzero(Path(verts).contains_points(radec))
-# uvis = uvis[inds].copy()
+header, bintab = fits.open(f336fn)
 
-(dists, idxs) = zip(*[circ(uvis['ra'], uvis['dec'], r, d) for r, d in zip(phot['ra'], phot['dec'])])
-idxs_4 = np.array(idxs)[np.array(dists) < 0.00003]
-pidx, = np.nonzero(np.array(dists) < 0.00003)
-ax.plot(phot['vegamag'][pidx] - uvis['F336W_VEGA'][idxs_4], uvis['F336W_VEGA'][idxs_4], 'o')
+# Aligned and reduced SBC catalogs
+f140fns = ['13710_M31-CENTER-SBC1_drz_phot.dat',
+           '13710_M31-CENTER-SBC2_drz_phot.dat',
+           '13710_M31-CENTER-SBC3_drz_phot.dat']
 
-1. Cull 336 to SBC footprint
-1. Find closest matches in ra, dec space
-1. Pick tolerance for not matched
-1. Check f140lp mag for not matched, make sense? Perhaps go to .phot or .st
-1. add f140lp mags to center.gst catalog.
+# Initialize new columns (Ben and Andy like 99 value for NaN)
+newcol = np.zeros(len(bintab.data)) + 99.
+newcolerr = np.zeros(len(bintab.data)) + 99.
+
+# matching tolerance
+tol = 0.00005
+
+for f140fn in f140fns:
+    # Read in ra and dec from SBC data
+    phot = Table.read(f140fn, format='ascii.commented_header')
+    radec = np.column_stack([phot['ra'], phot['dec']])
+    # find closest matches to UVIS ra dec
+    (dists, idxs) = zip(*[circ(bintab.data['RA'], bintab.data['DEC'], r, d)
+                          for r, d in zip(phot['ra'], phot['dec'])])
+
+    # filter by tolerance
+    matches = np.array(dists) < tol
+    idxs_4 = np.array(idxs)[matches]
+    pidx, = np.nonzero(matches)
+    print('with tol: {}, matched {} of {}.'.format(tol, len(pidx), len(idxs)))
+
+    # Diag plotting
+    # ax.plot(phot['vegamag'][pidx] - bintab.data['F336W_VEGA'][idxs_4],
+    #         bintab.data['F336W_VEGA'][idxs_4], 'o')
+
+    # add data to new column.
+    # With this loop, farther images from M31 center will overwrite
+    # sources from inner, if there are any. (based on the list order)
+    newcol[idxs_4] = phot['vegamag'][pidx]
+    newcolerr[idxs_4] = phot['vegamagerr'][pidx]
+
+# Make new columns
+col = fits.Column(name='F140LP_VEGA', format='E', array=newcol)
+colerr = fits.Column(name='F140LP_ERR', format='E', array=newcolerr)
+newcols = fits.ColDefs([col, colerr])
+
+# make new HDU
+newtab = fits.BinTableHDU.from_columns(bintab.columns + newcols)
+newhdu = fits.HDUList([header, newtab])
+
+# filename
+filters = '_'.join([f.replace('_VEGA','') for f in bintab.columns.names if
+                    f.startswith('F') and f.endswith('VEGA')])
+newname = '13710_M31-CENTER_{}.gst.fits'.format(filters)
+
+# save
+newhdu.writeto(newname, overwrite=True)
+print('wrote {}'.format(newname))

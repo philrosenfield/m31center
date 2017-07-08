@@ -3,106 +3,76 @@ import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn
+
 from astropy import wcs
 from astropy.io import fits
 
 
-seaborn.set()
 # FILTER	PHOTPLAM	PHOTFLAM	STmag	VEGAmag	ABmag
 # F140LP	1527.991	2.713e-17	20.316	20.919	23.088
 PHOTFLAM = 2.713e-17
 VEGAmag0 = 20.919
+APR_COR = 0.804  # 0.5" Aperture correction
 
-
-def factors(n):
-    import itertools
-    flatten_iter = itertools.chain.from_iterable
-    return np.sort(list(set(flatten_iter((i, n // i)
-                                         for i in range(1, int(n**0.5) + 1)
-                                         if n % i == 0))))
-
-
-def nearest_factor(num, nfact):
-    fs = factors(num)
-    return fs[np.argmin(np.abs(nfact - fs))]
-
-
-def withsep(fitsfile, makeplots=False):
-    import sep
-    hdu = fits.open(fitsfile)
-    w = wcs.WCS(hdu[1].header)
-    data = hdu[0].data
-    data = data.byteswap().newbyteorder()
-    m, s = np.nanmean(data), np.nanstd(data)
-
-    bkg = sep.Background(data)
-    bkg_image = bkg.back()
-    bkg_rms = bkg.rms()
-    data_sub = data - bkg
-    objects = sep.extract(data_sub, 4, err=bkg.globalrms)
-
-    flux, fluxerr, flag = sep.sum_circle(data_sub, objects['x'], objects['y'],
-                                         4.0, err=bkg.globalrms, gain=1.0)
-    print('{} objects. {} bg, {} bg rms'.format(len(objects), bkg.globalback,
-                                                bkg.globalrms))
-    vegamag = -2.5 * np.log10(flux * PHOTFLAM) - VEGAmag0
-    vegamagerr = -2.5 * np.log10(fluxerr * PHOTFLAM) - VEGAmag0
-    ra, dec = w.all_pix2world(objects['x'], objects['y'], 1)
-
-    if makeplots:
-        photplots(data, bkg_image, bkg_rms, data_sub, fitsfile,
-                  fitsfile.replace('.fits', '.pdf'))
-    return vegamag, vegamagerr, ra, dec
-
-
-def withphotutils(fitsfile, outfile, makeplots=False):
+def reduce(fitsfile, outfile, makeplots=False):
     from photutils import (Background2D, DAOStarFinder, CircularAperture,
-                           aperture_photometry, MeanBackground)
+                           aperture_photometry, MedianBackground,
+                           make_source_mask, SigmaClip)
     from photutils.utils import calc_total_error
     from astropy.stats import sigma_clipped_stats
+
+    # background variables
+    bkg_boxsize = 100
+    bkg_filter_size = (11, 11)
+    bkg_edge_method = 'pad'
+    bkg_estimator = MedianBackground()
+
+    # sigma clipped stats variables
+    sig = 5.
+    iters = 5
+
+    # star finder variables
+    fwhm = 1.5
+    # threshold = 5. * std
+
+    # aperture radius (in pixels)
+    # plate scale ~0.034 × 0.030"/pixel
+    # infinate aperture is 4"
+    # 15 pixels ~ 0.45"
+    apr_rad = 5
+
+    # load data and header
     hdu = fits.open(fitsfile)
     data = hdu[0].data
     w = wcs.WCS(hdu[0].header)
     nanmask = np.isnan(data)
-    data[nanmask] = -99
-    # square-ify
-    nx, ny = np.shape(data)
-    if nx != ny:
-        if ny > nx:
-            filler = np.zeros((ny - nx, ny)) - 99
-            newdata = np.vstack((data, filler))
-        else:
-            filler = np.zeros((nx, nx - ny)) - 99
-            newdata = np.hstack((data, filler))
-    else:
-        newdata = data.copy(deep=True)
+    # subtract background
+    bkg = Background2D(data, bkg_boxsize, filter_size=bkg_filter_size,
+                       edge_method=bkg_edge_method,
+                       bkg_estimator=bkg_estimator,
+                       mask=nanmask)
 
-    boxdim = nearest_factor(ny, 150)
-    mask = (newdata == -99)
-    # sigma_clip = SigmaClip(sigma=3., iters=10)
-    bkg = Background2D(newdata, (boxdim, boxdim), filter_size=(9, 9),
-                       mask=mask, bkg_estimator=MeanBackground())
-    data_sub = newdata - bkg.background
-    mean, median, std = sigma_clipped_stats(data_sub, sigma=8.0, iters=10,
-                                            mask=mask)
-    daofind = DAOStarFinder(fwhm=4.0, threshold=10. * std + median)
+    data_sub = data - bkg.background
+
+    # calculate background stats
+    mean, median, std = sigma_clipped_stats(data_sub, sigma=sig, iters=iters)
+    threshold = 5. * std
+
+    daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold, exclude_border=True)
     sources = daofind(data_sub)
 
     positions = (sources['xcentroid'], sources['ycentroid'])
-    apertures = CircularAperture(positions, r=4.)
+    #
+    apertures = CircularAperture(positions, r=apr_rad)
 
     effective_gain = hdu[0].header['EXPTIME']
 
     error = calc_total_error(data_sub, bkg.background, effective_gain)
     phot_table = aperture_photometry(data_sub, apertures, error=error,
-                                     mask=mask)
+                                     mask=nanmask)
 
-    vegamag = -2.5 * np.log10(phot_table['aperture_sum'] * PHOTFLAM) - VEGAmag0
-    # vegamagerr = \
-    #     -2.5 * np.log10(phot_table['aperture_sum_err'] * PHOTFLAM) - VEGAmag0
-    vegamagerr = verrtest(phot_table['aperture_sum'],
-                          phot_table['aperture_sum_err'])
+    vegamag, vegamagerr = calcmag(phot_table['aperture_sum'],
+                                  phot_table['aperture_sum_err'])
     ra, dec = w.all_pix2world(phot_table['xcenter'], phot_table['ycenter'], 1)
 
     phot_table['ra'] = ra
@@ -112,25 +82,27 @@ def withphotutils(fitsfile, outfile, makeplots=False):
     fmts = {c: '%.6f' for c in ['xcenter', 'ycenter', 'aperture_sum',
                                 'aperture_sum_err', 'ra', 'dec', 'vegamag',
                                 'vegamagerr']}
-    phot_table.write(outfile, format='ascii.commented_header', formats=fmts)
+    phot_table.write(outfile, format='ascii.commented_header', formats=fmts,
+                     overwrite=True)
     if makeplots:
         outfig = outfile + '.pdf'
-        axs = photplots(newdata, bkg.background, bkg.background_rms, data_sub,
+        axs = photplots(data, bkg.background, bkg.background_rms, data_sub,
                         fitsfile, outfig)
-        apertures.plot(color='red', lw=1.5, alpha=0.5, ax=axs[0, 1])
+        apertures.plot(color='r', lw=1.5, alpha=0.5, ax=axs[0, 1])
         plt.savefig(outfig)
     return vegamag, vegamagerr, ra, dec
 
 
-def verrtest(flux, flerr):
+def calcmag(flux, flerr):
+    # flux = flux * APR_COR
     mag = -2.5 * np.log10(flux * PHOTFLAM) - VEGAmag0
     merr = -2.5 * np.log10((flux - flerr) * PHOTFLAM) - VEGAmag0
     perr = -2.5 * np.log10((flux + flerr) * PHOTFLAM) - VEGAmag0
-    return (np.abs(mag - perr) + np.abs(mag - merr)) / 2
+    return mag, (np.abs(mag - perr) + np.abs(mag - merr)) / 2
 
 
 def photplots(data, bkg_image, bkg_rms, data_sub, fitsfile, outfig):
-    from astropy.visualization import SqrtStretch
+    from astropy.visualization import LogStretch, SqrtStretch
     from astropy.visualization.mpl_normalize import ImageNormalize
     norm = ImageNormalize(stretch=SqrtStretch())
     # for plotting
@@ -160,17 +132,6 @@ def photplots(data, bkg_image, bkg_rms, data_sub, fitsfile, outfig):
     return axs
 
 
-def getmags(fitsfile, outfile, makeplots=False, photutils=True):
-    if photutils:
-        vegamag, vegamagerr, ra, dec = withphotutils(fitsfile, outfile,
-                                                     makeplots=makeplots)
-    else:
-        vegamag, vegamagerr, ra, dec = withsep(fitsfile,
-                                               makeplots=makeplots)
-
-    return vegamag, vegamagerr, ra, dec
-
-
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="source extract!")
 
@@ -186,14 +147,17 @@ def main(argv=None):
     fig2, ax2 = plt.subplots()
     for fitsfile in args.fitsfiles:
         outfile = fitsfile.replace('.fits', '_phot.dat')
-        vegamag, vegamagerr, ra, dec = getmags(fitsfile, outfile,
-                                               makeplots=True)
+        vegamag, vegamagerr, ra, dec = reduce(fitsfile, outfile, makeplots=True)
         inds = np.isfinite(vegamag)
         h, b = np.histogram(vegamag[inds], bins=np.arange(20, 26, 0.1))
         ax.plot(b[1:], h, ls='steps-', label=fitsfile)
         ax.set_yscale('log')
-        ax.set_ylim(3, ax.get_ylim()[1])
-        ax1.plot(ra, dec, '.', label=fitsfile)
+        if len(args.fitsfiles) > 1:
+            ax1.plot(ra, dec, '.', label=fitsfile)
+        else:
+            cb = ax1.scatter(ra, dec, c=vegamag, cmap=plt.cm.RdBu, label=fitsfile,
+                            alpha=0.3, marker='.')
+            fig1.colorbar(cb)
         ax2.plot(vegamag[inds], vegamagerr[inds], '.', label=fitsfile)
     ax.legend(loc='best')
     ax1.legend(loc='best')

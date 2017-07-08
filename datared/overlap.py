@@ -1,12 +1,14 @@
 import glob
+
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn
 from astropy.io import fits
 from matplotlib.path import Path
-from fitshelper.footprints import parse_poly, parse_footprint, find_footprint
 from shapely.geometry import Polygon
 
-import seaborn
+from fitshelper.footprints import find_footprint, parse_footprint, parse_poly
+
 seaborn.set()
 
 """

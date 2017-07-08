@@ -1,0 +1,3 @@
+contours.reg was used as input to make contours_masked.reg
+
+use contours_masked.reg.

@@ -4,13 +4,13 @@ Prepare SBC bright star input list for CCMAP
 this is saved as a record for reproducibility: it will not do anything, and
 must be run interactively.
 """
-import aplpy
 import matplotlib.pyplot as plt
 import numpy as np
-
 from astropy import wcs
 from astropy.io import fits
 from astropy.table import Table
+
+import aplpy
 
 # reduced photometry table from SBC
 f140fn = '13710_M31-CENTER-SBC1_drz_phot.dat'
