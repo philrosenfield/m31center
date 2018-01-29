@@ -3,7 +3,7 @@
 import os
 from astropy.io import fits
 from astropy.wcs import WCS
-filename = 'I1_maj_cutout_14435.fits'
+filename = '../data/m31_irac1.fits'
 
 fn, ext = os.path.splitext(filename)
 outname = '{0:s}_thumb{1:s}'.format(fn, ext)
@@ -13,8 +13,8 @@ header = hdu[0].header
 wcs = WCS(header)
 
 # center values (int pixels)
-y = 846
-x = 759
+x = 2650
+y = 8260
 # half the thumbnail width (int pixels)
 hw = 250
 

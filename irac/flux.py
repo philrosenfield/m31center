@@ -5,8 +5,8 @@ from astropy.wcs import WCS
 from matplotlib.path import Path
 from shapely.geometry import Polygon
 
-regname = 'irac/contours_v3.reg'
-fitsname = 'irac/I1_min_cutout_2734.fits'
+# regname = 'irac/contours_v3.reg'
+# fitsname = 'irac/I1_min_cutout_2734.fits'
 # fits_name = 'irac/I1_maj_cutout_2752.fits'
 
 
@@ -28,11 +28,11 @@ def get_areas(verts):
     return (a[::-1] * u.degree ** 2).to(u.arcsecond ** 2)
 
 
-def get_flux(fitsname, regname):
+def get_flux(fitsname, regname, plot=False):
     """
     Calculate the flux of an image within each annular region.
     """
-    hdu = fits.open(fits_name)
+    hdu = fits.open(fitsname)
     header = hdu[0].header
     w = WCS(header)
 
@@ -41,7 +41,7 @@ def get_flux(fitsname, regname):
     assert q.to_string().replace(' ', '') == header['BUNIT']
 
     data = hdu[0].data
-    # I don't know how to get an index matching with data.
+    # I don't know how to get an index matching with 2D data.
     # so here is a grid of indices, one for each pixel.
     grid = np.meshgrid(np.arange(data.shape[0]), np.arange(data.shape[1]))
     grid = np.concatenate(grid).ravel()
@@ -72,6 +72,8 @@ def get_flux(fitsname, regname):
     counts_reg = []
     flux_reg = []
     # note, we're going back to inner to outer...
+    if plot:
+        fig, ax = plt.subplots()
     for i, inds in enumerate(inds_within_annuli[::-1]):
         # sum the counts
         counts = np.sum([data[i, j] for i, j in grid[inds]])
@@ -83,7 +85,7 @@ def get_flux(fitsname, regname):
         flux_reg.append(flux)
         counts_reg.append(counts)
 
-        # fig, ax = plt.subplots()
-        # ax.plot(grid[:, 0][inds], grid[:, 1][inds], '.', alpha=0.3)
-        # print(counts, flux, areas[i])
+        if plot:
+            ax.plot(grid[:, 0][inds], grid[:, 1][inds], '.', alpha=0.3)
+            print(counts, flux, areas[i])
     return flux_reg, counts_reg, areas

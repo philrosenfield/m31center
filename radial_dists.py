@@ -11,14 +11,14 @@ from .utils import zeroed_cmap
 # Things to be in the function caller:
 # base: '/Users/rosenfield/Library/Mobile Documents/com~apple~CloudDocs/Work/m31center
 #reg_name = 'irac/contours_masked.reg'
-reg_name = 'R12_codes/contours_v3.reg'
-fitsfile = 'datared/m31_bulge/pyraf_workdir/13710_M31-CENTER_F225W_F275W_F336W.gst.fits'
+reg_name = 'irac/contours_v3.reg'
+fitsfile = 'data/13710_M31-CENTER_F225W_F275W_F336W_F140LP.gst.fits'
 filter2 = 'F336W_VEGA'
 
 uvis = fits.getdata(fitsfile)
 verts = parse_footprint(reg_name, return_coords=True)
 
-# inpoly_kw = None
+#inpoly_kw = None
 inpoly_kw = {'ax': ax, 'plt_kw': {'alpha': 0.3}}
 hbyreg_kw = {'dcol': 0.2, 'dmag': 0.2, 'inpoly_kw': inpoly_kw, 'index_mag': 2}
 
@@ -29,7 +29,7 @@ data = load_models(models)
 # the brightest track for each metallicity
 df = brightest_tracks(data, filter2)
 
-for i, filter1 in enumerate(['F275W_VEGA', 'F225W_VEGA', 'F140LP_VEGA']):
+for i, filter1 in enumerate(['F225W_VEGA', 'F140LP_VEGA']):
     xlab, ylab = cmd_labels(filter1, filter2)
     if i < 2:
         extent = [-2., 5, 16, 26.5]
@@ -45,7 +45,8 @@ for i, filter1 in enumerate(['F275W_VEGA', 'F225W_VEGA', 'F140LP_VEGA']):
         print(len(np.nonzero(inds)[0]) / areas[i])
         print(' ', len(np.nonzero(xinds)) / areas[i])
 
-    kw = {'xlab': xlab, 'ylab': ylab, 'extent': extent, 'cmaps': plt.cm.Blues}
+    kw = {'xlab': xlab, 'ylab': ylab, 'extent': extent, 'cmaps': plt.cm.Blues,
+          'plt_kw': {'ms':0.8}, 'contour_kw': {'levels': np.linspace(5,60,10)}}
     grid = panels(hesses, cmds=cmds, **kw)
     #grid = panels(hesses, **kw)
 
@@ -56,6 +57,7 @@ for i, filter1 in enumerate(['F275W_VEGA', 'F225W_VEGA', 'F140LP_VEGA']):
     ax.set_xlim(extent[:2])
     ax.set_ylim(extent[2:][::-1])
     # sgrid = hess_panels(scaled_hess, **kw)
+
 
     for i in range(len(hesses) - 1):
         h1 = hesses[i]

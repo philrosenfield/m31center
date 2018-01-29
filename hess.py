@@ -94,18 +94,26 @@ def hess_by_reg(reg_name, fitsfile, filter1, filter2, extent=None, dcol=0.1,
     return hesses, areas, cbin, mbin, cmds
 
 
-def setup_panels(npanels):
+def setup_panels(npanels, colorbar=True):
     from mpl_toolkits.axes_grid1 import ImageGrid
     fig = plt.figure(figsize=(npanels * 1.7, 4))
-    grid = ImageGrid(fig, 111, nrows_ncols=(1, npanels), label_mode='all',
-                     share_all=True, cbar_location='top', cbar_mode='each')
+    kw = {'nrows_ncols': (1, npanels),
+          'label_mode': 'all',
+          'share_all': True}
+    if colorbar:
+        kw.update({'cbar_location': 'top', 'cbar_mode': 'each'})
+    grid = ImageGrid(fig, 111, **kw)
     return fig, grid
 
 
 def panels(hesses, extent, vmin=None, vmax=None, log=False, xlab=None,
-           ylab=None, cmaps=None, cmds=None, plt_kw=None):
+           ylab=None, cmaps=None, cmds=None, plt_kw=None, imshow_kw=None,
+           contour_kw=None, contour=False):
     """ImageGrid caller"""
     plt_kw = plt_kw or {}
+    imshow_kw = imshow_kw or {}
+    contour_kw = contour_kw or {}
+
     if cmaps is None:
         cmaps = plt.get_cmap(plt.rcParams['image.cmap'])
 
@@ -115,26 +123,24 @@ def panels(hesses, extent, vmin=None, vmax=None, log=False, xlab=None,
     if log:
         hesses = np.log10(hesses)
 
-    fig, grid = setup_panels(len(hesses))
-
-    if vmax is None:
-        vmax = np.nanmax(hesses)
-
-    if vmin is None:
-        vmin = np.nanmin(hesses)
+    colorbar = False
+    if contour or cmds is None:
+        colorbar=True
+    fig, grid = setup_panels(len(hesses), colorbar=colorbar)
 
     for i in range(len(hesses)):
         if cmds is None:
             origin = 'upper'
-            img = grid[i].imshow(hesses[i].T, extent=extent, vmin=vmin, vmax=vmax,
-                                 cmap=cmaps[i], origin=origin)
+            img = grid[i].imshow(hesses[i].T, extent=extent,
+                                 cmap=cmaps[i], **imshow_kw)
+            grid.cbar_axes[i].colorbar(img)
         else:
             origin = 'lower'
             img = grid[i].plot(cmds[i][:, 0], cmds[i][:, 1], '.', **plt_kw)
 
-        if np.sum(hesses[i]) > 0:
-            img = grid[i].contour(hesses[i].T, extent=extent, color='k',
-                                  origin=origin, zorder=100.)
+        if np.sum(hesses[i]) > 0 and contour:
+            img = grid[i].contour(hesses[i].T, extent=extent,
+                                  origin=origin, zorder=100., **contour_kw)
             grid.cbar_axes[i].colorbar(img)
 
     if xlab is not None:

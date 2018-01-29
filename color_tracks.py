@@ -3,7 +3,11 @@ import pandas as pd
 from .utils import closest_match
 
 
+#Alam_Av = {'F225W': 2.32794, 'F336W': 1.65798, 'F275W': 1.94440,
+#           'F140LP': 1.82410}
+
 def add_extinctions(data, logg=4.5, Rv=3.1, filters=None, extfn=None):
+    """Add extinction with Teff depenedence."""
     filters = filters or ['F225W', 'F275W', 'F336W', 'F140LP']
 
     extfn = extfn or 'models/ext_UVbright.dat'
@@ -31,6 +35,7 @@ def add_extinctions(data, logg=4.5, Rv=3.1, filters=None, extfn=None):
 
 
 def add_apparent_mag(data, dmod=24.47, Av=0.206, filters=None):
+    """Add an apparent mag column for each filter"""
     filters = filters or ['F225W', 'F275W', 'F336W', 'F140LP']
     for filt in filters:
         try:
